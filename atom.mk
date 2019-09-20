@@ -35,19 +35,33 @@ BUSYBOX_MAKE_ARGS := \
 	LDFLAGS="$(TARGET_GLOBAL_LDFLAGS)" \
 	V=$(V)
 
+debug-setup:
+	@rm -f $(BUSYBOX_SRC_DIR)/.config
+	$(Q)if [ -n "$(PANTAVISOR_DEBUG)" ]; then \
+		echo "Debug build: Enabling HTTPD and debug options"; \
+		$(PV_SCRIPTS)/pv-busybox-enable-httpd.sed $(BUSYBOX_CONFIG_FILE) > $(BUSYBOX_SRC_DIR)/.config; \
+	fi
+	@$(Q)if test -f $(BUSYBOX_SRC_DIR)/.config && diff $(BUSYBOX_SRC_DIR)/.config $(BUSYBOX_CONFIG_FILE); then \
+		$(MAKE) $(BUSYBOX_MAKE_ARGS) -C $(BUSYBOX_SRC_DIR) uninstall \
+			|| echo "Ignoring uninstall errors"; \
+		$(MAKE) $(BUSYBOX_MAKE_ARGS) -C $(BUSYBOX_SRC_DIR) clean \
+			|| echo "Ignoring clean errors"; \
+	fi
+
 # Copy config in build dir
 $(LOCAL_PATH)/.config: $(BUSYBOX_CONFIG_FILE)
 	@mkdir -p $(dir $@)
 	@cp -af $< $@
 
 # Build
-$(BUSYBOX_BUILD_DIR)/$(LOCAL_MODULE_FILENAME): $(BUSYBOX_SRC_DIR)/.config
+$(BUSYBOX_BUILD_DIR)/$(LOCAL_MODULE_FILENAME): debug-setup $(BUSYBOX_SRC_DIR)/.config
 	@echo "Checking busybox config: $(BUSYBOX_CONFIG_FILE)"
 	$(Q) yes "" 2>/dev/null | $(MAKE) $(BUSYBOX_MAKE_ARGS) -C $(BUSYBOX_SRC_DIR) oldconfig
 	@echo "Building busybox"
 	$(Q) $(MAKE) $(BUSYBOX_MAKE_ARGS) -C $(BUSYBOX_SRC_DIR) SKIP_STRIP=y
 	@echo "Installing busybox"
 	$(Q) $(MAKE) $(BUSYBOX_MAKE_ARGS) -C $(BUSYBOX_SRC_DIR) install
+	@rm $(BUSYBOX_SRC_DIR)/.config
 	@rm -rf $(TARGET_OUT_STAGING)/linuxrc
 	@touch $@
 
