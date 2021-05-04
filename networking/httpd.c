@@ -2186,7 +2186,11 @@ static void handle_incoming_and_exit(const len_and_sockaddr *fromAddr)
 	unsigned total_headers_len;
 #endif
 #if ENABLE_FEATURE_HTTPD_CGI
-	static const char request_HEAD[] ALIGN1 = "HEAD";
+	static const char request_HEAD[]    ALIGN1 = "HEAD";
+	static const char request_POST[]    ALIGN1 = "POST";
+	static const char request_PUT[]     ALIGN1 = "PUT";
+	static const char request_DELETE[]  ALIGN1 = "DELETE";
+	static const char request_OPTIONS[] ALIGN1 = "OPTIONS";
 	const char *prequest;
 	unsigned long length = 0;
 	enum CGI_type cgi_type = CGI_NONE;
@@ -2246,16 +2250,32 @@ static void handle_incoming_and_exit(const len_and_sockaddr *fromAddr)
 	prequest = request_GET;
 	if (strcasecmp(iobuf, prequest) != 0) {
 		prequest = request_HEAD;
-		if (strcasecmp(iobuf, prequest) != 0) {
-			prequest = "POST";
-			if (strcasecmp(iobuf, prequest) != 0)
-				send_headers_and_exit(HTTP_NOT_IMPLEMENTED);
-		}
+		if (strcasecmp(iobuf, prequest) == 0)
+		goto found;
+
+		prequest = request_POST;
+		if (strcasecmp(iobuf, prequest) == 0)
+			goto found;
+
+		prequest = request_DELETE;
+		if (strcasecmp(iobuf, prequest) == 0)
+			goto found;
+
+		prequest = request_PUT;
+		if (strcasecmp(iobuf, prequest) == 0)
+			goto found;
+
+		prequest = request_OPTIONS;
+		if (strcasecmp(iobuf, prequest) == 0)
+			goto found;
+
+		send_headers_and_exit(HTTP_NOT_IMPLEMENTED);
 	}
 #else
 	if (strcasecmp(iobuf, request_GET) != 0)
 		send_headers_and_exit(HTTP_NOT_IMPLEMENTED);
 #endif
+found:
 	// rfc2616: method and URI is separated by exactly one space
 	//urlp = skip_whitespace(urlp); - should not be necessary
 	if (urlp[0] != '/')
