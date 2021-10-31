@@ -1700,7 +1700,7 @@ void exec_prog_or_SHELL(char **argv) NORETURN FAST_FUNC;
  */
 const char *get_shell_name(void) FAST_FUNC;
 
-#if ENABLE_FEATURE_SETPRIV_CAPABILITIES || ENABLE_RUN_INIT
+#if ENABLE_FEATURE_SETPRIV_CAPABILITIES || ENABLE_RUN_INIT || ENABLE_NSENTER
 unsigned cap_name_to_number(const char *cap) FAST_FUNC;
 void printf_cap(const char *pfx, unsigned cap_no) FAST_FUNC;
 void drop_capability(int cap_ordinal) FAST_FUNC;

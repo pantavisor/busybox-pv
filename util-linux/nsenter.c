@@ -54,6 +54,22 @@
 
 #include "libbb.h"
 
+
+#include <linux/capability.h>
+#include <linux/securebits.h>
+#include <sys/prctl.h>
+
+
+DEFINE_STRUCT_CAPS;
+
+// #include <sys/capability.h>
+// This header is in libcap, but the functions are in libc.
+// Comment in the header says this above capset/capget:
+/* system calls - look to libc for function to system call mapping */
+extern int capset(cap_user_header_t header, cap_user_data_t data);
+extern int capget(cap_user_header_t header, const cap_user_data_t data);
+
+
 struct namespace_descr {
 	int flag;		/* value passed to setns() */
 	char ns_nsfile8[8];	/* "ns/" + namespace file in process' procfs entry */
@@ -77,7 +93,8 @@ enum {
 	OPT_root	= 1 << 9,
 	OPT_wd		= 1 << 10,
 	OPT_nofork	= 1 << 11,
-	OPT_prescred	= (1 << 12) * ENABLE_LONG_OPTS,
+	OPT_cap 	= 1 << 12,
+	OPT_prescred	= (1 << 13) * ENABLE_LONG_OPTS,
 };
 enum {
 	NS_USR_POS = 0,
@@ -105,7 +122,7 @@ static const struct namespace_descr ns_list[] ALIGN_INT = {
  * Upstream nsenter doesn't support the short option for --preserve-credentials
  * "+": stop on first non-option
  */
-static const char opt_str[] ALIGN1 = "+""U::i::u::n::p::m::""t:+S:+G:+r::w::F";
+static const char opt_str[] ALIGN1 = "+""U::i::u::n::p::m::""t:+S:+G:+r::w::F::c";
 
 #if ENABLE_LONG_OPTS
 static const char nsenter_longopts[] ALIGN1 =
@@ -121,6 +138,7 @@ static const char nsenter_longopts[] ALIGN1 =
 	"root\0"			Optional_argument	"r"
 	"wd\0"				Optional_argument	"w"
 	"no-fork\0"			No_argument		"F"
+	"caps\0"			No_argument		"c"
 	"preserve-credentials\0"	No_argument		"\xff"
 	;
 #endif
@@ -164,6 +182,10 @@ int nsenter_main(int argc UNUSED_PARAM, char **argv)
 	int target_pid = 0;
 	int uid = 0;
 	int gid = 0;
+	struct caps capst;
+	unsigned securebits;
+	__u32 bounds;
+	int cap = 0;
 
 	memset(ns_ctx_list, 0, sizeof(ns_ctx_list));
 
@@ -253,6 +275,52 @@ int nsenter_main(int argc UNUSED_PARAM, char **argv)
 	if (!(opts & OPT_nofork) && (opts & OPT_pid)) {
 		xvfork_parent_waits_and_exits();
 		/* Child continues */
+	}
+
+	/*
+	 * Entering the namespace with caps matching the target
+	 */
+	if ((opts & OPT_cap) && (opts & OPT_target)) {
+		int ret;
+		getcaps(&capst);
+
+		capst.header.pid = target_pid;
+		if (capget(&capst.header, capst.data))
+			bb_simple_perror_msg_and_die("capget");
+
+		/* XXX: fix securebits
+		securebits = prctl(PR_GET_SECUREBITS);
+		securebits |= SECBIT_NOROOT;
+		*/
+
+		while ((ret = prctl(PR_CAPBSET_READ, cap)) >= 0) {
+			// if we dont have a cap in bounding set, we don't
+			// need to think about
+			// dropinning it
+			if (!ret)
+				goto next;
+
+			// new bounds will be effective | permitted | inheritable of the target pid
+			bounds = capst.data[CAP_TO_INDEX(cap)].effective
+				| capst.data[CAP_TO_INDEX(cap)].permitted \
+				| capst.data[CAP_TO_INDEX(cap)].inheritable;
+
+			__u32 m = CAP_TO_MASK(cap);
+			if ((bounds & CAP_TO_MASK(cap)) == CAP_TO_MASK(cap))
+				goto next;
+
+			// printf("DROPPING bounding cap: %d\n", cap);
+			if (prctl(PR_CAPBSET_DROP, cap))
+				bb_simple_perror_msg_and_die("droppriv");
+		next:
+			cap++;
+		}
+
+		/* XXX: need to fix securebits to adjust to whatever --target has ...
+		// set any securebits we have determined
+		if (prctl(PR_SET_SECUREBITS, securebits))
+			bb_simple_perror_msg_and_die("securebits");
+		*/
 	}
 
 	if (opts & OPT_setgid) {
