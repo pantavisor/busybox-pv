@@ -219,6 +219,19 @@ int nsenter_main(int argc UNUSED_PARAM, char **argv)
 	}
 
 	/*
+	 * Lets gather caps info from target pid before switching NS if --caps is used
+	 */
+	if ((opts & OPT_cap) && (opts & OPT_target)) {
+		int ret;
+		getcaps(&capst);
+
+		capst.header.pid = target_pid;
+		if (capget(&capst.header, capst.data))
+			bb_simple_perror_msg_and_die("capget");
+	}
+
+
+	/*
 	 * Entering the user namespace without --preserve-credentials implies
 	 * --setuid & --setgid and clearing root's groups.
 	 */
@@ -282,11 +295,6 @@ int nsenter_main(int argc UNUSED_PARAM, char **argv)
 	 */
 	if ((opts & OPT_cap) && (opts & OPT_target)) {
 		int ret;
-		getcaps(&capst);
-
-		capst.header.pid = target_pid;
-		if (capget(&capst.header, capst.data))
-			bb_simple_perror_msg_and_die("capget");
 
 		/* XXX: fix securebits
 		securebits = prctl(PR_GET_SECUREBITS);
