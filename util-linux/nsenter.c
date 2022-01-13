@@ -26,6 +26,7 @@
 //usage:     "\n	-n[FILE]	Enter network namespace"
 //usage:     "\n	-p[FILE]	Enter pid namespace"
 //usage:     "\n	-U[FILE]	Enter user namespace"
+//usage:     "\n	-C[FILE]	Enter cgroup namespace"
 //usage:     "\n	-S UID		Set uid in entered namespace"
 //usage:     "\n	-G GID		Set gid in entered namespace"
 //usage:	IF_LONG_OPTS(
@@ -38,6 +39,9 @@
 #include <sched.h>
 #ifndef CLONE_NEWUTS
 # define CLONE_NEWUTS  0x04000000
+#endif
+#ifndef CLONE_NEWCGROUP
+# define CLONE_NEWCGROUP 0x02000000
 #endif
 #ifndef CLONE_NEWIPC
 # define CLONE_NEWIPC  0x08000000
@@ -72,7 +76,7 @@ extern int capget(cap_user_header_t header, const cap_user_data_t data);
 
 struct namespace_descr {
 	int flag;		/* value passed to setns() */
-	char ns_nsfile8[8];	/* "ns/" + namespace file in process' procfs entry */
+	char ns_nsfile8[10];	/* "ns/" + namespace file in process' procfs entry */
 };
 
 struct namespace_ctx {
@@ -82,22 +86,24 @@ struct namespace_ctx {
 
 enum {
 	OPT_user	= 1 << 0,
-	OPT_ipc		= 1 << 1,
-	OPT_uts		= 1 << 2,
-	OPT_network	= 1 << 3,
-	OPT_pid		= 1 << 4,
-	OPT_mount	= 1 << 5,
-	OPT_target	= 1 << 6,
-	OPT_setuid	= 1 << 7,
-	OPT_setgid	= 1 << 8,
-	OPT_root	= 1 << 9,
-	OPT_wd		= 1 << 10,
-	OPT_nofork	= 1 << 11,
-	OPT_cap 	= 1 << 12,
-	OPT_prescred	= (1 << 13) * ENABLE_LONG_OPTS,
+	OPT_cgroup	= 1 << 1,
+	OPT_ipc		= 1 << 2,
+	OPT_uts		= 1 << 3,
+	OPT_network	= 1 << 4,
+	OPT_pid		= 1 << 5,
+	OPT_mount	= 1 << 6,
+	OPT_target	= 1 << 7,
+	OPT_setuid	= 1 << 8,
+	OPT_setgid	= 1 << 9,
+	OPT_root	= 1 << 10,
+	OPT_wd		= 1 << 11,
+	OPT_nofork	= 1 << 12,
+	OPT_cap 	= 1 << 13,
+	OPT_prescred	= (1 << 14) * ENABLE_LONG_OPTS,
 };
 enum {
 	NS_USR_POS = 0,
+	NS_CGROUP_POS,
 	NS_IPC_POS,
 	NS_UTS_POS,
 	NS_NET_POS,
@@ -112,6 +118,7 @@ enum {
  */
 static const struct namespace_descr ns_list[] ALIGN_INT = {
 	{ CLONE_NEWUSER, "ns/user", },
+	{ CLONE_NEWCGROUP,   "ns/cgroup",  },
 	{ CLONE_NEWIPC,  "ns/ipc",  },
 	{ CLONE_NEWUTS,  "ns/uts",  },
 	{ CLONE_NEWNET,  "ns/net",  },
@@ -122,11 +129,12 @@ static const struct namespace_descr ns_list[] ALIGN_INT = {
  * Upstream nsenter doesn't support the short option for --preserve-credentials
  * "+": stop on first non-option
  */
-static const char opt_str[] ALIGN1 = "+""U::i::u::n::p::m::""t:+S:+G:+r::w::F::c";
+static const char opt_str[] ALIGN1 = "+""U::C::i::u::n::p::m::""t:+S:+G:+r::w::F::c";
 
 #if ENABLE_LONG_OPTS
 static const char nsenter_longopts[] ALIGN1 =
 	"user\0"			Optional_argument	"U"
+	"cgroup\0"			Optional_argument	"C"
 	"ipc\0"				Optional_argument	"i"
 	"uts\0"				Optional_argument	"u"
 	"net\0"				Optional_argument	"n"
@@ -191,6 +199,7 @@ int nsenter_main(int argc UNUSED_PARAM, char **argv)
 
 	opts = getopt32long(argv, opt_str, nsenter_longopts,
 			&ns_ctx_list[NS_USR_POS].path,
+			&ns_ctx_list[NS_CGROUP_POS].path,
 			&ns_ctx_list[NS_IPC_POS].path,
 			&ns_ctx_list[NS_UTS_POS].path,
 			&ns_ctx_list[NS_NET_POS].path,
