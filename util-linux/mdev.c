@@ -891,6 +891,18 @@ static int FAST_FUNC dirAction(const char *fileName UNUSED_PARAM,
 	return (depth >= MAX_SYSFS_DEPTH ? SKIP : TRUE);
 }
 
+static const char *getdevdir() {
+	static char *devdir = NULL;
+
+	if (!devdir) {
+		const char *rootfsdir = getenv("ROOTFSDIR");
+		devdir = malloc (sizeof(char) * PATH_MAX);
+		sprintf(devdir, "%s%s", rootfsdir ? rootfsdir : "", "/dev");
+	}
+	return devdir;
+}
+
+
 /* For the full gory details, see linux/Documentation/firmware_class/README
  *
  * Firmware loading works like this:
@@ -951,7 +963,7 @@ static void load_firmware(const char *firmware, const char *sysfs_path)
 		full_write(loading_fd, "-1", 2);
 
  out:
-	xchdir("/dev");
+	xchdir(getdevdir());
 	if (ENABLE_FEATURE_CLEAN_UP) {
 		close(firmware_fd);
 		close(loading_fd);
@@ -1208,12 +1220,12 @@ int mdev_main(int argc UNUSED_PARAM, char **argv)
 	/* Force the configuration file settings exactly */
 	umask(0);
 
-	xchdir("/dev");
+	xchdir(getdevdir());
 
 	opt = getopt32(argv, "s" IF_FEATURE_MDEV_DAEMON("df"));
 
 #if ENABLE_FEATURE_MDEV_CONF
-	G.filename = "/etc/mdev.conf";
+	G.filename = getenv("MDEV_CONF") ? getenv("MDEV_CONF") : "/etc/mdev.conf";
 	if (opt & (MDEV_OPT_SCAN|MDEV_OPT_DAEMON)) {
 		/* Same as xrealloc_vector(NULL, 4, 0): */
 		G.rule_vec = xzalloc((1 << 4) * sizeof(*G.rule_vec));
