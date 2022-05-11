@@ -79,7 +79,7 @@
 //config:config FEATURE_MDEV_FOLLOW_X_ROOT
 //config:	bool "Support following a switch or pivot root in mount_namespace"
 //config:	default y
-//config:	depends on MDEV
+//config:	depends on MDEV_DAEMON
 //config:	help
 //config:	Add support for following a switch_root and pivot_root of pid 1
 //config:	Useful for having mdev prefer the dev/ nodes of a root getting
