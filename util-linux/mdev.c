@@ -75,6 +75,17 @@
 //config:	hotplug events this mode of operation will consume less
 //config:	resources than registering mdev as hotplug helper or using the
 //config:	uevent applet.
+//config:
+//config:config FEATURE_MDEV_FOLLOW_X_ROOT
+//config:	bool "Support following a switch or pivot root in mount_namespace"
+//config:	default y
+//config:	depends on MDEV
+//config:	help
+//config:	Add support for following a switch_root and pivot_root of pid 1
+//config:	Useful for having mdev prefer the dev/ nodes of a root getting
+//config:	prepared in a mount namespace before the pivot/switch_root and then
+//config:	continue operating in DAEMON mode inside mnt namespace afterwards.
+//config:
 
 //applet:IF_MDEV(APPLET(mdev, BB_DIR_SBIN, BB_SUID_DROP))
 
@@ -317,6 +328,11 @@ struct globals {
 
 /* We use additional bytes in make_device() */
 #define SCRATCH_SIZE 128
+
+#if ENABLE_FEATURE_MDEV_FOLLOW_X_ROOT
+static char *newroot = NULL;
+static char *newrootdev = NULL;
+#endif
 
 #if ENABLE_FEATURE_MDEV_CONF
 
@@ -571,6 +587,25 @@ static void make_device(char *device_name, char *path, int operation)
 {
 	int major, minor, type, len;
 	char *path_end = path + strlen(path);
+	struct stat s;
+	static char wd [PATH_MAX] = {0};
+
+#if ENABLE_FEATURE_MDEV_FOLLOW_X_ROOT
+	if (newrootdev && !(!access(newrootdev, X_OK) && !stat(newrootdev, &s) && (S_IFDIR & s.st_mode))){
+		dbg1("following x root...");
+		newrootdev=NULL;
+		chdir("/");
+		chdir("..");
+		chroot(".");
+	}
+
+	if (newrootdev)
+		chdir(newrootdev);
+	else
+#endif
+		chdir ("/dev");
+
+	getcwd(wd, PATH_MAX);
 
 	/* Try to read major/minor string.  Note that the kernel puts \n after
 	 * the data, so we don't need to worry about null terminating the string
@@ -891,18 +926,6 @@ static int FAST_FUNC dirAction(const char *fileName UNUSED_PARAM,
 	return (depth >= MAX_SYSFS_DEPTH ? SKIP : TRUE);
 }
 
-static const char *getdevdir() {
-	static char *devdir = NULL;
-
-	if (!devdir) {
-		const char *rootfsdir = getenv("ROOTFSDIR");
-		devdir = malloc (sizeof(char) * PATH_MAX);
-		sprintf(devdir, "%s%s", rootfsdir ? rootfsdir : "", "/dev");
-	}
-	return devdir;
-}
-
-
 /* For the full gory details, see linux/Documentation/firmware_class/README
  *
  * Firmware loading works like this:
@@ -963,7 +986,13 @@ static void load_firmware(const char *firmware, const char *sysfs_path)
 		full_write(loading_fd, "-1", 2);
 
  out:
-	xchdir(getdevdir());
+#if ENABLE_FEATURE_MDEV_FOLLOW_X_ROOT
+	if (newrootdev)
+		xchdir(newrootdev);
+	else
+#endif
+		xchdir("/dev");
+
 	if (ENABLE_FEATURE_CLEAN_UP) {
 		close(firmware_fd);
 		close(loading_fd);
@@ -1220,9 +1249,22 @@ int mdev_main(int argc UNUSED_PARAM, char **argv)
 	/* Force the configuration file settings exactly */
 	umask(0);
 
-	xchdir(getdevdir());
-
 	opt = getopt32(argv, "s" IF_FEATURE_MDEV_DAEMON("df"));
+
+#if ENABLE_FEATURE_MDEV_FOLLOW_X_ROOT
+	newroot = getenv("FOLLOW_X_ROOT");
+
+	if (newroot && !newrootdev) {
+		newrootdev = malloc(sizeof(char) * (strlen(newroot) + 6));
+		sprintf(newrootdev, "%s%s", newroot, "/dev");
+	}
+
+	if (newrootdev)
+		xchdir(newrootdev);
+	else
+#endif
+		xchdir("/dev");
+
 
 #if ENABLE_FEATURE_MDEV_CONF
 	G.filename = getenv("MDEV_CONF") ? getenv("MDEV_CONF") : "/etc/mdev.conf";
