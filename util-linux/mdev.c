@@ -78,7 +78,7 @@
 //config:config FEATURE_MDEV_FOLLOW_X_ROOT
 //config:	bool "Support following a switch or pivot root in mount_namespace"
 //config:	default y
-//config:	depends on MDEV_DAEMON
+//config:	depends on FEATURE_MDEV_DAEMON
 //config:	help
 //config:	Add support for following a switch_root and pivot_root of pid 1
 //config:	Useful for having mdev prefer the dev/ nodes of a root getting
@@ -128,6 +128,7 @@
 #include <linux/netlink.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <sched.h>
 
 /* "mdev -s" scans /sys/class/xxx, looking for directories which have dev
  * file (it is of the form "M:m\n"). Example: /sys/class/tty/tty0/dev
@@ -486,13 +487,6 @@ static void parse_next_rule(void)
 static const struct rule *next_rule(void)
 {
 	struct rule *rule;
-
-	/* Open conf file if we didn't do it yet */
-	if (!G.parser && G.filename) {
-		dbg3("config_open('%s')", G.filename);
-		G.parser = config_open2(G.filename, fopen_for_read);
-		G.filename = NULL;
-	}
 
 	if (G.rule_vec) {
 		/* mdev -s */
@@ -1280,6 +1274,9 @@ static void daemon_loop(char *temp, int fd)
 int mdev_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
 int mdev_main(int argc UNUSED_PARAM, char **argv)
 {
+	char *followpid;
+	pid_t followpid_p;
+
 	enum {
 		MDEV_OPT_SCAN       = 1 << 0,
 		MDEV_OPT_SYSLOG     = 1 << 1,
@@ -1306,6 +1303,7 @@ int mdev_main(int argc UNUSED_PARAM, char **argv)
 
 #if ENABLE_FEATURE_MDEV_FOLLOW_X_ROOT
 	newroot = getenv("FOLLOW_X_ROOT");
+	followpid = getenv("FOLLOW_X_PID");
 
 	if (newroot && !newrootdev) {
 		newrootdev = malloc(sizeof(char) * (strlen(newroot) + 6));
@@ -1325,12 +1323,37 @@ int mdev_main(int argc UNUSED_PARAM, char **argv)
 		/* Same as xrealloc_vector(NULL, 4, 0): */
 		G.rule_vec = xzalloc((1 << 4) * sizeof(*G.rule_vec));
 	}
+
+	/* Open conf file if we didn't do it yet */
+	if (!G.parser && G.filename) {
+		dbg3("config_open('%s')", G.filename);
+		G.parser = config_open2(G.filename, fopen_for_read);
+		G.filename = NULL;
+	}
 #endif
 
 	if (opt & MDEV_OPT_SYSLOG) {
 		openlog(applet_name, LOG_PID, LOG_DAEMON);
 		logmode |= LOGMODE_SYSLOG;
 	}
+
+#if ENABLE_FEATURE_MDEV_FOLLOW_X_ROOT
+	if (followpid) {
+		char procpath[PATH_MAX];
+		if (newroot)
+			snprintf(procpath, PATH_MAX -1 ,"%s/proc/%d", newroot, followpid);
+		else
+			snprintf(procpath, PATH_MAX -1 ,"/proc/%d", followpid);
+
+		int procpidfd = open(procpath, O_DIRECTORY | O_RDONLY | O_CLOEXEC);
+		setns(procpidfd, CLONE_NEWNS);
+
+		if (newrootdev)
+			xchdir(newrootdev);
+		else
+			xchdir("/dev");
+	}
+#endif
 
 #if ENABLE_FEATURE_MDEV_DAEMON
 	if (opt & MDEV_OPT_DAEMON) {
