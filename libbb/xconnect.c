@@ -435,7 +435,7 @@ int FAST_FUNC create_and_bind_to_netlink(int proto, int grp, unsigned rcvbuf)
 
 	memset(&sa, 0, sizeof(sa));
 	sa.nl_family = AF_NETLINK;
-	sa.nl_pid = getpid();
+	sa.nl_pid = 0;
 	sa.nl_groups = grp;
 	xbind(fd, (struct sockaddr *) &sa, sizeof(sa));
 	close_on_exec_on(fd);
