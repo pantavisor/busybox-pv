@@ -74,7 +74,9 @@ static int recursive_action1(recursive_state_t *state, const char *fileName)
 
 	follow = ACTION_FOLLOWLINKS;
 	if (state->depth == 0)
-		follow = ACTION_FOLLOWLINKS | ACTION_FOLLOWLINKS_L0;
+		follow |= ACTION_FOLLOWLINKS_L0 | ACTION_FOLLOWLINKS_L1;
+	if (state->depth == 1)
+		follow |= ACTION_FOLLOWLINKS_L1;
 	follow &= state->flags;
 	status = (follow ? stat : lstat)(fileName, &statbuf);
 	if (status < 0) {

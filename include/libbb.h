@@ -511,9 +511,10 @@ enum {
 	ACTION_RECURSE        = (1 << 0),
 	ACTION_FOLLOWLINKS    = (1 << 1),
 	ACTION_FOLLOWLINKS_L0 = (1 << 2),
-	ACTION_DEPTHFIRST     = (1 << 3),
-	ACTION_QUIET          = (1 << 4),
-	ACTION_DANGLING_OK    = (1 << 5),
+	ACTION_FOLLOWLINKS_L1 = (1 << 3),
+	ACTION_DEPTHFIRST     = (1 << 4),
+	ACTION_QUIET          = (1 << 5),
+	ACTION_DANGLING_OK    = (1 << 6),
 };
 typedef uint8_t recurse_flags_t;
 typedef struct recursive_state {
