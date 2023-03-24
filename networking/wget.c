@@ -1046,6 +1046,7 @@ static void download_one_url(const char *url)
 	FILE *dfp;                      /* socket to ftp server (data)      */
 	char *fname_out_alloc;
 	char *redirected_path = NULL;
+	char *unix_proxy = NULL;
 	struct host_info server;
 	struct host_info target;
 
@@ -1058,6 +1059,9 @@ static void download_one_url(const char *url)
 
 	/* Use the proxy if necessary */
 	use_proxy = (strcmp(G.proxy_flag, "off") != 0);
+	/* Use local: unix socket as proxy rather than a http one.
+	   Example: unix_proxy=local:/run/socketX wget http://localhost/test.cgi */
+	unix_proxy = getenv("unix_proxy");
 	if (use_proxy) {
 		char *proxy = getenv(target.protocol[0] == 'f' ? "ftp_proxy" : "http_proxy");
 //FIXME: what if protocol is https? Ok to use http_proxy?
@@ -1068,7 +1072,10 @@ static void download_one_url(const char *url)
 	if (!use_proxy) {
 		server.protocol = target.protocol;
 		server.port = target.port;
-		if (ENABLE_FEATURE_IPV6) {
+		// must be unix proxy here
+		if (unix_proxy) {
+			server.host = xstrdup(unix_proxy);
+		} else if (ENABLE_FEATURE_IPV6) {
 			//free(server.allocated); - can't be non-NULL
 			server.host = server.allocated = xstrdup(target.host);
 		} else {
