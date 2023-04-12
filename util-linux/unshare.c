@@ -32,6 +32,7 @@
 //usage:     "\n	-n,--net[=FILE]		Unshare network namespace"
 //usage:     "\n	-p,--pid[=FILE]		Unshare PID namespace"
 //usage:     "\n	-U,--user[=FILE]	Unshare user namespace"
+//usage:     "\n	-C,--cgroup[=FILE]	Unshare cgroup namespace"
 //usage:     "\n	-f,--fork		Fork before execing PROG"
 //usage:     "\n	-r,--map-root-user	Map current user to root (implies -U)"
 //usage:     "\n	--mount-proc[=DIR]	Mount /proc filesystem first (implies -m)"
@@ -106,11 +107,12 @@ enum {
 	OPT_net		= 1 << 3,
 	OPT_pid		= 1 << 4,
 	OPT_user	= 1 << 5, /* OPT_user, NS_USR_POS, and ns_list[] index must match! */
-	OPT_fork	= 1 << 6,
-	OPT_map_root	= 1 << 7,
-	OPT_mount_proc	= 1 << 8,
-	OPT_propagation	= 1 << 9,
-	OPT_setgroups	= 1 << 10,
+	OPT_cgroup	= 1 << 6,
+	OPT_fork	= 1 << 7,
+	OPT_map_root	= 1 << 8,
+	OPT_mount_proc	= 1 << 9,
+	OPT_propagation	= 1 << 10,
+	OPT_setgroups	= 1 << 11,
 };
 enum {
 	NS_MNT_POS = 0,
@@ -119,6 +121,7 @@ enum {
 	NS_NET_POS,
 	NS_PID_POS,
 	NS_USR_POS, /* OPT_user, NS_USR_POS, and ns_list[] index must match! */
+	NS_CGR_POS,
 	NS_COUNT,
 };
 static const struct namespace_descr ns_list[] = {
@@ -128,6 +131,7 @@ static const struct namespace_descr ns_list[] = {
 	{ CLONE_NEWNET,  "net"  },
 	{ CLONE_NEWPID,  "pid"  },
 	{ CLONE_NEWUSER, "user" }, /* OPT_user, NS_USR_POS, and ns_list[] index must match! */
+	{ CLONE_NEWCGROUP, "cgroup" },
 };
 
 /*
@@ -137,7 +141,7 @@ static const struct namespace_descr ns_list[] = {
  * we are forced to use "fake" letters for them.
  * '+': stop at first non-option.
  */
-#define OPT_STR "+muinpU""fr""\xfd::""\xfe:""\xff:"
+#define OPT_STR "+muinpUC""fr""\xfd::""\xfe:""\xff:"
 static const char unshare_longopts[] ALIGN1 =
 	"mount\0"		Optional_argument	"\xf0"
 	"uts\0"			Optional_argument	"\xf1"
@@ -145,6 +149,7 @@ static const char unshare_longopts[] ALIGN1 =
 	"net\0"			Optional_argument	"\xf3"
 	"pid\0"			Optional_argument	"\xf4"
 	"user\0"		Optional_argument	"\xf5"
+	"cgroup\0"		Optional_argument	"\xf5"
 	"fork\0"		No_argument		"f"
 	"map-root-user\0"	No_argument		"r"
 	"mount-proc\0"		Optional_argument	"\xfd"
@@ -226,7 +231,8 @@ int unshare_main(int argc UNUSED_PARAM, char **argv)
 		&ns_ctx_list[NS_IPC_POS].path,
 		&ns_ctx_list[NS_NET_POS].path,
 		&ns_ctx_list[NS_PID_POS].path,
-		&ns_ctx_list[NS_USR_POS].path
+		&ns_ctx_list[NS_USR_POS].path,
+		&ns_ctx_list[NS_CGR_POS].path
 	);
 	argv += optind;
 	//bb_error_msg("opts:0x%x", opts);
