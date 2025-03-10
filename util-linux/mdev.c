@@ -312,6 +312,8 @@ struct globals {
 	int verbose;
 	char *subsystem;
 	char *subsys_env; /* for putenv("SUBSYSTEM=subsystem") */
+	char *devpath;
+	char *devpath_env;
 	char *modalias_env; /* for putenv("MODALIAS=alias:somethinglonger") */
 #if ENABLE_FEATURE_MDEV_CONF
 	const char *filename;
@@ -904,16 +906,29 @@ static int FAST_FUNC fileAction(struct recursive_state *state,
 {
 	size_t len = strlen(fileName) - 4; /* can't underflow */
 	char *path = state->userData;	/* char array[PATH_MAX + SCRATCH_SIZE] */
+        void *resp;
 	char subsys[PATH_MAX];
+	char devpath[PATH_MAX];
 	int res;
 
 	/* Is it a ".../dev" file? (len check is for paranoid reasons) */
-	if (strcmp(fileName + len, "/dev") != 0 || len >= PATH_MAX - 32)
-		return FALSE; /* not .../dev */
+	//if (strcmp(fileName + len, "/dev") != 0 || len >= PATH_MAX - 32)
+	//	return FALSE; /* not .../dev */
 
 	strcpy(path, fileName);
 	path[len] = '\0';
 
+	strcpy(devpath, path);
+	resp = realpath(path, devpath);
+        if (resp) {
+		free(G.devpath);
+		G.devpath = devpath;
+		if (G.devpath) {
+			G.devpath = xstrdup(G.devpath + 4);
+			G.devpath_env = xasprintf("%s=%s", "DEVPATH", G.devpath);
+			putenv(G.devpath_env);
+		}
+        }
 	/* Read ".../subsystem" symlink in the same directory where ".../dev" is */
 	strcpy(subsys, path);
 	strcpy(subsys + len, "/subsystem");
