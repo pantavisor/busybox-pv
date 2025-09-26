@@ -396,6 +396,7 @@ static char *parse_envmatch_pfx(char *val)
 		xregcomp(&e->match, eq + 1, REG_EXTENDED);
 		*semicolon = ';';
 		val = semicolon + 1;
+		printf("ENVNAME: %s\n", e->envname);
 	}
 }
 
@@ -627,7 +628,7 @@ static void make_device(char *device_name, char *path, int operation)
 			/* no "dev" file, but we can still run scripts
 			 * based on device name */
 		} else if (sscanf(path_end + 1, "%u:%u", &major, &minor) == 2) {
-			dbg1("dev %u,%u", major, minor);
+			dbg1("dev %s %u,%u", device_name, major, minor);
 		} else {
 			major = -1;
 		}
@@ -678,6 +679,7 @@ static void make_device(char *device_name, char *path, int operation)
 			/* Fall back to just basename unless modalias */
 			device_name = (char*) bb_basename(path);
 		}
+		dbg1("device_name %s",device_name);
 	}
 
 	/* Determine device type */
@@ -727,7 +729,7 @@ static void make_device(char *device_name, char *path, int operation)
 		}
 		/* else: str_to_match = device_name */
 
-		if (rule->regex_compiled) {
+		if (rule->regex_compiled && operation != OP_modalias) {
 			int regex_match = regexec(&rule->match, str_to_match, ARRAY_SIZE(off), off, 0);
 			dbg3("regex_match for '%s':%d", str_to_match, regex_match);
 			//bb_error_msg("matches:");
@@ -752,7 +754,7 @@ static void make_device(char *device_name, char *path, int operation)
 #endif
 		/* Build alias name */
 		alias = NULL;
-		if (ENABLE_FEATURE_MDEV_RENAME && operation != OP_modalias && rule->ren_mov) {
+		if (ENABLE_FEATURE_MDEV_RENAME  && operation != OP_modalias && rule->ren_mov) {
 			aliaslink = rule->ren_mov[0];
 			if (aliaslink == '!') {
 				/* "!": suppress node creation/deletion */
@@ -1255,6 +1257,11 @@ static void initial_scan(char *temp)
 
 	/* Create all devices from /sys/dev hierarchy */
 	recursive_action("/sys/bus/pci/devices",
+			 ACTION_RECURSE | ACTION_FOLLOWLINKS_L1,
+			 fileActionModalias, dirActionModalias, temp);
+
+	/* Create all devices from /sys/dev hierarchy */
+	recursive_action("/sys/bus/scsi/devices",
 			 ACTION_RECURSE | ACTION_FOLLOWLINKS_L1,
 			 fileActionModalias, dirActionModalias, temp);
 
