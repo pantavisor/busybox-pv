@@ -726,7 +726,14 @@ static void make_device(char *device_name, char *path, int operation)
 		/* else: str_to_match = device_name */
 
 		if (rule->regex_compiled) {
-			int regex_match = regexec(&rule->match, str_to_match, ARRAY_SIZE(off), off, 0);
+			int regex_match;
+
+			/* OP_modalias for a device without DEVNAME has no
+			 * name to match: skip name rules, but not $envvar
+			 * rules or the final match-all rule */
+			if (!str_to_match)
+				continue;
+			regex_match = regexec(&rule->match, str_to_match, ARRAY_SIZE(off), off, 0);
 			dbg3("regex_match for '%s':%d", str_to_match, regex_match);
 			//bb_error_msg("matches:");
 			//for (int i = 0; i < ARRAY_SIZE(off); i++) {
@@ -855,7 +862,7 @@ static void make_device(char *device_name, char *path, int operation)
 
 		if (ENABLE_FEATURE_MDEV_EXEC && command) {
 			/* setenv will leak memory, use putenv/unsetenv/free */
-			char *s = xasprintf("%s=%s", "MDEV", node_name);
+			char *s = xasprintf("%s=%s", "MDEV", node_name ? node_name : "");
 			putenv(s);
 			dbg1("running: %s", command);
 			if (system(command) == -1)
